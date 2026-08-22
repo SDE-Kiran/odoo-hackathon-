@@ -1,1 +1,210 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PeopleFlow HRMS</title>
+  <style>
+:root{--bg:#f5f7fb;--card:#fff;--text:#172033;--muted:#718096;--primary:#4f46e5;--primary2:#6366f1;--line:#e8ebf2;--success:#10b981;--warning:#f59e0b;--danger:#ef4444;--sidebar:#10162a}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Arial;color:var(--text);background:var(--bg)}button,input,select,textarea{font:inherit}button{cursor:pointer;border:0}
+.hidden{display:none!important}.auth-screen{min-height:100vh;display:grid;place-items:center;background:radial-gradient(circle at 15% 10%,#6366f155,transparent 30%),linear-gradient(135deg,#11182d,#202b52);padding:24px}
+.auth-brand{text-align:center;color:white;margin-bottom:22px}.brand-mark{width:44px;height:44px;border-radius:13px;background:linear-gradient(135deg,#818cf8,#4f46e5);display:grid;place-items:center;color:#fff;font-weight:900;letter-spacing:-1px}.auth-brand .brand-mark{margin:0 auto 14px}.auth-brand h1{margin:0;font-size:34px}.auth-brand p{opacity:.72;margin:7px 0 0}
+.auth-card{width:min(430px,100%);background:#fff;border-radius:22px;padding:28px;box-shadow:0 25px 70px #0005}.auth-tabs{display:grid;grid-template-columns:1fr 1fr;background:#f1f3f8;padding:4px;border-radius:12px;margin-bottom:22px}.auth-tab{padding:11px;border-radius:9px;background:transparent;color:var(--muted);font-weight:700}.auth-tab.active{background:#fff;color:var(--primary);box-shadow:0 2px 8px #0000000d}
+label{font-size:13px;font-weight:700;display:block;margin:13px 0 6px}input,select,textarea{width:100%;border:1px solid #dfe3ec;border-radius:10px;padding:11px 12px;outline:none;background:#fff;color:var(--text)}input:focus,select:focus,textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px #4f46e51a}.primary-btn{background:linear-gradient(135deg,var(--primary),var(--primary2));color:white;padding:11px 16px;border-radius:10px;font-weight:800}.full{width:100%;margin-top:18px}.demo-note{font-size:12px;line-height:1.7;color:var(--muted);background:#f8f9fc;padding:10px;border-radius:9px;margin-top:14px}
+.app{min-height:100vh;display:flex}.sidebar{width:250px;background:var(--sidebar);color:#fff;padding:22px 15px;display:flex;flex-direction:column;position:fixed;inset:0 auto 0 0}.side-brand{display:flex;gap:11px;align-items:center;padding:4px 9px 25px}.side-brand small{display:block;color:#8e99b3;margin-top:2px}.user-mini{display:flex;gap:10px;align-items:center;background:#ffffff0c;padding:12px;border-radius:14px;margin-bottom:20px}.user-mini small{display:block;color:#9ba5bd;font-size:11px;margin-top:2px}.avatar{width:38px;height:38px;border-radius:12px;background:#6366f1;display:grid;place-items:center;color:#fff;font-weight:800;flex:none}.nav-item{width:100%;text-align:left;background:transparent;color:#aeb7cb;padding:12px 13px;border-radius:10px;margin:2px 0;font-weight:650}.nav-item span{margin-left:8px}.nav-item:hover,.nav-item.active{background:#ffffff12;color:#fff}.nav-item.active{box-shadow:inset 3px 0 var(--primary2)}.logout{margin-top:auto;background:#ffffff0a;color:#c2c9d8;padding:12px;border-radius:10px;text-align:left}.main{margin-left:250px;width:calc(100% - 250px);padding:26px 34px}.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:25px}.eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--primary);font-weight:800;margin:0 0 4px}.topbar h2{margin:0;font-size:27px}.top-actions{display:flex;align-items:center;gap:13px}.icon-btn{width:40px;height:40px;border-radius:12px;background:#fff;border:1px solid var(--line);position:relative}.icon-btn span{position:absolute;width:7px;height:7px;border-radius:50%;background:var(--danger);right:8px;top:8px}
+.grid{display:grid;gap:18px}.stats{grid-template-columns:repeat(4,minmax(0,1fr))}.two{grid-template-columns:1.4fr 1fr}.three{grid-template-columns:repeat(3,1fr)}.card{background:var(--card);border:1px solid var(--line);border-radius:17px;padding:20px;box-shadow:0 7px 22px #26324b08}.stat{display:flex;justify-content:space-between;align-items:flex-start}.stat h3{font-size:26px;margin:8px 0 3px}.muted{color:var(--muted);font-size:13px}.stat-icon{width:42px;height:42px;border-radius:12px;background:#eef0ff;display:grid;place-items:center;color:var(--primary);font-size:20px}.section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.section-head h3{margin:0;font-size:17px}.badge{display:inline-flex;padding:5px 9px;border-radius:999px;font-size:11px;font-weight:800}.badge.success{background:#dff8ed;color:#087c58}.badge.warning{background:#fff3d6;color:#a46600}.badge.danger{background:#fee4e2;color:#b42318}.badge.info{background:#e7eaff;color:#4338ca}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:12px 10px;border-bottom:1px solid var(--line);font-size:13px;white-space:nowrap}th{font-size:11px;text-transform:uppercase;color:var(--muted);letter-spacing:.5px}.person{display:flex;align-items:center;gap:9px}.person .avatar{width:32px;height:32px;border-radius:9px;font-size:11px}.action{padding:7px 10px;border-radius:8px;background:#eef0ff;color:#4338ca;font-weight:700;font-size:12px}.danger-btn{background:#fee4e2;color:#b42318}.success-btn{background:#e2f8ed;color:#087c58}
+.hero{background:linear-gradient(135deg,#171d35,#303b70);color:#fff;border:0;overflow:hidden;position:relative}.hero:after{content:"";position:absolute;width:220px;height:220px;border-radius:50%;background:#818cf833;right:-80px;top:-100px}.hero h1{margin:5px 0;font-size:26px}.hero p{color:#cbd2e5}.hero .primary-btn{background:#fff;color:#3730a3}.quick-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.quick{background:#f8f9fd;border:1px solid var(--line);padding:13px;border-radius:12px;text-align:left}.quick b{display:block;margin-top:6px;font-size:12px}.profile-grid{display:grid;grid-template-columns:280px 1fr;gap:18px}.profile-card{text-align:center}.profile-big{width:92px;height:92px;border-radius:26px;background:linear-gradient(135deg,#818cf8,#4338ca);color:#fff;display:grid;place-items:center;font-size:28px;font-weight:900;margin:4px auto 14px}.detail-list{display:grid;grid-template-columns:1fr 1fr;gap:14px}.detail{padding:13px;background:#f8f9fc;border-radius:11px}.detail small{color:var(--muted);display:block;margin-bottom:4px}.detail b{font-size:14px}.form-actions{display:flex;gap:9px;margin-top:18px}.secondary-btn{padding:11px 15px;background:#f0f2f7;border-radius:10px;font-weight:700}.filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px}.filters input,.filters select{width:auto;min-width:150px}.empty{text-align:center;padding:45px 10px;color:var(--muted)}.notice{padding:12px 14px;border-radius:11px;background:#eef0ff;color:#4338ca;font-size:13px;margin-bottom:15px}.chart-box{height:260px}.progress{height:8px;background:#edf0f5;border-radius:20px;overflow:hidden}.progress i{display:block;height:100%;background:linear-gradient(90deg,#4f46e5,#818cf8);border-radius:20px}
+.modal{position:fixed;inset:0;background:#11182788;display:grid;place-items:center;padding:20px;z-index:20}.modal-card{background:#fff;width:min(520px,100%);border-radius:18px;padding:23px;max-height:90vh;overflow:auto}.modal-head{display:flex;justify-content:space-between;align-items:center}.close{background:#f1f3f8;border-radius:8px;width:34px;height:34px}.notification{padding:12px;border-bottom:1px solid var(--line);font-size:13px}.notification:last-child{border:0}
+@media(max-width:950px){.sidebar{width:75px}.side-brand div:not(.brand-mark),.user-mini>div:not(.avatar),.nav-item span,.logout span{display:none}.nav-item{text-align:center}.main{margin-left:75px;width:calc(100% - 75px);padding:20px}.stats{grid-template-columns:1fr 1fr}.two,.profile-grid{grid-template-columns:1fr}.quick-grid{grid-template-columns:1fr 1fr}.detail-list{grid-template-columns:1fr}}
+@media(max-width:600px){.main{padding:15px}.stats,.three{grid-template-columns:1fr}.topbar h2{font-size:22px}.quick-grid{grid-template-columns:1fr}.sidebar{width:62px}.main{margin-left:62px;width:calc(100% - 62px)}}
+
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div id="toast"></div>
+
+  <section id="authScreen" class="auth-screen">
+    <div class="auth-brand">
+      <div class="brand-mark">PF</div>
+      <h1>PeopleFlow</h1>
+      <p>Employee & HR Management System</p>
+    </div>
+
+    <div class="auth-card">
+      <div class="auth-tabs">
+        <button class="auth-tab active" data-auth="signin">Sign In</button>
+        <button class="auth-tab" data-auth="signup">Sign Up</button>
+      </div>
+
+      <form id="signinForm">
+        <label>Email</label>
+        <input id="loginEmail" type="email" placeholder="you@company.com" required>
+        <label>Password</label>
+        <input id="loginPassword" type="password" placeholder="••••••••" required>
+        <button class="primary-btn full" type="submit">Sign In</button>
+        <p class="demo-note">Demo HR: <b>admin@peopleflow.com</b> / <b>admin123</b><br>Demo employee: <b>kiran@peopleflow.com</b> / <b>123456</b></p>
+      </form>
+
+      <form id="signupForm" class="hidden">
+        <label>Employee ID</label>
+        <input id="signupId" placeholder="EMP006" required>
+        <label>Full Name</label>
+        <input id="signupName" placeholder="Your name" required>
+        <label>Email</label>
+        <input id="signupEmail" type="email" placeholder="you@company.com" required>
+        <label>Password</label>
+        <input id="signupPassword" type="password" minlength="6" placeholder="Minimum 6 characters" required>
+        <label>Role</label>
+        <select id="signupRole"><option value="Employee">Employee</option><option value="HR">HR</option></select>
+        <button class="primary-btn full" type="submit">Create Account</button>
+      </form>
+    </div>
+  </section>
+
+  <section id="appScreen" class="app hidden">
+    <aside class="sidebar">
+      <div class="side-brand"><div class="brand-mark">PF</div><div><b>PeopleFlow</b><small>HRMS</small></div></div>
+      <div class="user-mini"><div class="avatar" id="sideAvatar">KM</div><div><b id="sideName">Kiran Monish</b><small id="sideRole">Employee</small></div></div>
+      <nav id="nav">
+        <button class="nav-item active" data-page="dashboard">⌂ <span>Dashboard</span></button>
+        <button class="nav-item" data-page="profile">◉ <span>My Profile</span></button>
+        <button class="nav-item" data-page="attendance">◷ <span>Attendance</span></button>
+        <button class="nav-item" data-page="leave">▣ <span>Leave Requests</span></button>
+        <button class="nav-item" data-page="payroll">₹ <span>Payroll</span></button>
+        <button class="nav-item hr-only" data-page="employees">♙ <span>Employees</span></button>
+        <button class="nav-item hr-only" data-page="approvals">✓ <span>Leave Approvals</span></button>
+        <button class="nav-item hr-only" data-page="reports">▥ <span>Reports</span></button>
+      </nav>
+      <button id="logoutBtn" class="logout">↪ <span>Logout</span></button>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div><p class="eyebrow">Human Resources</p><h2 id="pageTitle">Dashboard</h2></div>
+        <div class="top-actions"><button class="icon-btn" id="notifyBtn">🔔<span id="alertDot"></span></button><div class="avatar" id="topAvatar">KM</div></div>
+      </header>
+
+      <div id="pageContent"></div>
+    </main>
+  </section>
+
+  <script>
+const $=s=>document.querySelector(s);
+const $$=s=>document.querySelectorAll(s);
+
+const seedEmployees=[
+ {id:"EMP001",name:"Kiran Monish",email:"kiran@peopleflow.com",role:"Employee",department:"Engineering",phone:"+91 98765 43210",address:"Chennai, Tamil Nadu",salary:65000,status:"Active",initials:"KM"},
+ {id:"EMP002",name:"Nithish S",email:"nithish@peopleflow.com",role:"Employee",department:"Frontend",phone:"+91 98765 11223",address:"Bengaluru, Karnataka",salary:62000,status:"Active",initials:"NS"},
+ {id:"EMP003",name:"Nithish Kumar K",email:"nithishk@peopleflow.com",role:"Employee",department:"Database",phone:"+91 98765 22113",address:"Chennai, Tamil Nadu",salary:60000,status:"Active",initials:"NK"},
+ {id:"EMP004",name:"Ananya Rao",email:"ananya@peopleflow.com",role:"Employee",department:"Design",phone:"+91 98765 33221",address:"Hyderabad, Telangana",salary:58000,status:"Active",initials:"AR"},
+ {id:"EMP005",name:"Admin HR",email:"admin@peopleflow.com",role:"HR",department:"Human Resources",phone:"+91 90000 00000",address:"Chennai, Tamil Nadu",salary:85000,status:"Active",initials:"AH"}
+];
+let employees=JSON.parse(localStorage.getItem("pf_employees")||"null")||seedEmployees;
+let attendance=JSON.parse(localStorage.getItem("pf_attendance")||"null")||[
+ {id:"A1",employee:"Kiran Monish",date:new Date().toISOString().slice(0,10),checkIn:"09:12",checkOut:"18:02",status:"Present"},
+ {id:"A2",employee:"Nithish S",date:new Date().toISOString().slice(0,10),checkIn:"09:30",checkOut:"",status:"Present"},
+ {id:"A3",employee:"Nithish Kumar K",date:new Date().toISOString().slice(0,10),checkIn:"",checkOut:"",status:"Leave"}
+];
+let leaves=JSON.parse(localStorage.getItem("pf_leaves")||"null")||[
+ {id:"L1",employee:"Kiran Monish",type:"Paid",from:"2026-08-25",to:"2026-08-26",remarks:"Personal work",status:"Pending"},
+ {id:"L2",employee:"Nithish S",type:"Sick",from:"2026-08-18",to:"2026-08-18",remarks:"Not feeling well",status:"Approved"}
+];
+let current=null;
+
+function save(){localStorage.setItem("pf_employees",JSON.stringify(employees));localStorage.setItem("pf_attendance",JSON.stringify(attendance));localStorage.setItem("pf_leaves",JSON.stringify(leaves))}
+function initials(name){return name.split(" ").map(x=>x[0]).slice(0,2).join("").toUpperCase()}
+function employee(){return employees.find(e=>e.email===current.email)||employees[0]}
+function toast(msg,type=""){const t=$("#toast");t.textContent=msg;t.className="show "+type;setTimeout(()=>t.className="",2500)}
+function money(n){return "₹"+Number(n).toLocaleString("en-IN")}
+function today(){return new Date().toISOString().slice(0,10)}
+function statusBadge(s){let c=s==="Approved"||s==="Present"||s==="Active"?"success":s==="Pending"||s==="Half-day"?"warning":s==="Rejected"||s==="Absent"?"danger":"info";return `<span class="badge ${c}">${s}</span>`}
+
+function login(email,password){
+ const e=employees.find(x=>x.email.toLowerCase()===email.toLowerCase() && ((x.role==="HR"&&password==="admin123")||(x.role!=="HR"&&password==="123456")));
+ if(!e)return toast("Invalid email or password","error");
+ current=e; localStorage.setItem("pf_current",JSON.stringify({email:e.email})); openApp();
+}
+function openApp(){
+ $("#authScreen").classList.add("hidden");$("#appScreen").classList.remove("hidden");
+ const e=employee();$("#sideName").textContent=e.name;$("#sideRole").textContent=e.role;$("#sideAvatar").textContent=e.initials||initials(e.name);$("#topAvatar").textContent=e.initials||initials(e.name);
+ $$(".hr-only").forEach(x=>x.style.display=e.role==="HR"?"block":"none");
+ render("dashboard");
+}
+function logout(){current=null;localStorage.removeItem("pf_current");$("#appScreen").classList.add("hidden");$("#authScreen").classList.remove("hidden")}
+function render(page){
+ $$(".nav-item").forEach(x=>x.classList.toggle("active",x.dataset.page===page));
+ const titles={dashboard:"Dashboard",profile:"My Profile",attendance:"Attendance",leave:"Leave Requests",payroll:"Payroll",employees:"Employees",approvals:"Leave Approvals",reports:"Reports"};
+ $("#pageTitle").textContent=titles[page]||"Dashboard";
+ const views={dashboard:dashboard,profile:profile,attendance:attendancePage,leave:leavePage,payroll:payrollPage,employees:employeesPage,approvals:approvalsPage,reports:reportsPage};
+ $("#pageContent").innerHTML=views[page]?views[page]():dashboard();
+ if(page==="reports")setTimeout(drawChart,50);
+}
+
+function dashboard(){
+ const e=employee(), isHR=e.role==="HR", ownAtt=attendance.filter(a=>a.employee===e.name);
+ const present=ownAtt.filter(a=>a.status==="Present").length;
+ const pending=leaves.filter(l=>l.employee===e.name&&l.status==="Pending").length;
+ if(isHR){
+  return `<div class="grid stats">
+   ${stat("Employees",employees.length,"♙")} ${stat("Present Today",attendance.filter(a=>a.date===today()&&a.status==="Present").length,"◷")} ${stat("Pending Leaves",leaves.filter(l=>l.status==="Pending").length,"▣")} ${stat("Monthly Payroll",money(employees.reduce((s,x)=>s+x.salary,0)),"₹")}
+  </div>
+  <div class="grid two" style="margin-top:18px">
+   <div class="card hero"><p class="eyebrow" style="color:#c7ceff">HR CONTROL CENTER</p><h1>Welcome back, ${e.name} 👋</h1><p>Manage employees, attendance, leave approvals and payroll from one place.</p><button class="primary-btn" onclick="render('employees')">Manage Employees →</button></div>
+   <div class="card"><div class="section-head"><h3>Quick Actions</h3></div><div class="quick-grid">
+    <button class="quick" onclick="render('employees')">♙<b>Employees</b></button><button class="quick" onclick="render('approvals')">✓<b>Approvals</b></button><button class="quick" onclick="render('attendance')">◷<b>Attendance</b></button><button class="quick" onclick="render('payroll')">₹<b>Payroll</b></button>
+   </div></div>
+  </div>
+  <div class="grid two" style="margin-top:18px"><div class="card"><div class="section-head"><h3>Recent Leave Requests</h3><button class="action" onclick="render('approvals')">View all</button></div>${leaveRows(leaves.slice(-4).reverse())}</div>
+  <div class="card"><div class="section-head"><h3>Today's Attendance</h3></div>${attendanceRows(attendance.filter(a=>a.date===today()).slice(0,5))}</div></div>`;
+ }
+ return `<div class="grid two"><div class="card hero"><p class="eyebrow" style="color:#c7ceff">EMPLOYEE PORTAL</p><h1>Welcome, ${e.name.split(" ")[0]} 👋</h1><p>Keep track of your attendance, leave requests, profile and payroll.</p><button class="primary-btn" onclick="render('attendance')">Check Attendance →</button></div>
+ <div class="card"><div class="section-head"><h3>Today's Attendance</h3>${statusBadge(ownAtt.find(a=>a.date===today())?.status||"Not Marked")}</div><p class="muted">Check-in and check-out from your dashboard.</p><div class="quick-grid"><button class="quick" onclick="checkIn()">⏱<b>Check In</b></button><button class="quick" onclick="checkOut()">⏲<b>Check Out</b></button><button class="quick" onclick="render('leave')">▣<b>Apply Leave</b></button><button class="quick" onclick="render('profile')">◉<b>My Profile</b></button></div></div></div>
+ <div class="grid stats" style="margin-top:18px">${stat("Present Days",present,"✓")} ${stat("Pending Leaves",pending,"▣")} ${stat("Monthly Salary",money(e.salary),"₹")} ${stat("Department",e.department,"⌁")}</div>
+ <div class="card" style="margin-top:18px"><div class="section-head"><h3>Recent Activity</h3><button class="action" onclick="render('attendance')">Attendance</button></div>${attendanceRows(ownAtt.slice(-5).reverse())}</div>`;
+}
+function stat(label,value,icon){return `<div class="card stat"><div><span class="muted">${label}</span><h3>${value}</h3><span class="muted">Updated just now</span></div><div class="stat-icon">${icon}</div></div>`}
+function attendanceRows(rows){if(!rows.length)return `<div class="empty">No attendance records.</div>`;return `<div class="table-wrap"><table><thead><tr><th>Employee</th><th>Date</th><th>Check in</th><th>Check out</th><th>Status</th></tr></thead><tbody>${rows.map(a=>`<tr><td>${a.employee}</td><td>${a.date}</td><td>${a.checkIn||"—"}</td><td>${a.checkOut||"—"}</td><td>${statusBadge(a.status)}</td></tr>`).join("")}</tbody></table></div>`}
+function leaveRows(rows){if(!rows.length)return `<div class="empty">No leave requests.</div>`;return `<div class="table-wrap"><table><thead><tr><th>Employee</th><th>Type</th><th>Dates</th><th>Status</th></tr></thead><tbody>${rows.map(l=>`<tr><td>${l.employee}</td><td>${l.type}</td><td>${l.from} → ${l.to}</td><td>${statusBadge(l.status)}</td></tr>`).join("")}</tbody></table></div>`}
+
+function profile(){const e=employee();return `<div class="profile-grid"><div class="card profile-card"><div class="profile-big">${e.initials||initials(e.name)}</div><h3>${e.name}</h3><p class="muted">${e.role} · ${e.department}</p>${statusBadge(e.status)}<hr style="border:0;border-top:1px solid var(--line);margin:20px 0"><p class="muted">Employee ID</p><b>${e.id}</b></div><div class="card"><div class="section-head"><h3>Personal & Job Details</h3><button class="action" onclick="editProfile()">Edit Profile</button></div><div class="detail-list">
+${detail("Email",e.email)}${detail("Phone",e.phone)}${detail("Address",e.address)}${detail("Department",e.department)}${detail("Role",e.role)}${detail("Salary",money(e.salary))}${detail("Documents","Employment contract, ID proof")}${detail("Profile picture","Initials avatar")}</div></div></div>`}
+function detail(a,b){return `<div class="detail"><small>${a}</small><b>${b}</b></div>`}
+function editProfile(){const e=employee();modal("Edit Profile",`<label>Phone</label><input id="editPhone" value="${e.phone}"><label>Address</label><input id="editAddress" value="${e.address}"><div class="form-actions"><button class="secondary-btn" onclick="closeModal()">Cancel</button><button class="primary-btn" onclick="saveProfile()">Save Changes</button></div>`)}
+function saveProfile(){const e=employee();e.phone=$("#editPhone").value;e.address=$("#editAddress").value;save();closeModal();openApp();toast("Profile updated successfully","success")}
+
+function attendancePage(){const e=employee();let rows=e.role==="HR"?attendance:attendance.filter(a=>a.employee===e.name);return `<div class="notice">Employees can view their own attendance. HR can view attendance for everyone.</div><div class="card"><div class="section-head"><h3>Attendance Tracking</h3>${e.role!=="HR"?`<div class="form-actions" style="margin:0"><button class="action success-btn" onclick="checkIn()">Check In</button><button class="action" onclick="checkOut()">Check Out</button></div>`:""}</div>${attendanceRows(rows.slice().reverse())}</div>`}
+function checkIn(){const e=employee(), exists=attendance.find(a=>a.employee===e.name&&a.date===today());if(exists){toast("You already checked in today","error");return}attendance.push({id:"A"+Date.now(),employee:e.name,date:today(),checkIn:new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}),checkOut:"",status:"Present"});save();render("attendance");toast("Check-in recorded","success")}
+function checkOut(){const e=employee(),a=attendance.find(x=>x.employee===e.name&&x.date===today());if(!a){toast("Please check in first","error");return}if(a.checkOut){toast("You already checked out","error");return}a.checkOut=new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});save();render("attendance");toast("Check-out recorded","success")}
+
+function leavePage(){const e=employee(),rows=leaves.filter(l=>l.employee===e.name);return `<div class="grid two"><div class="card"><div class="section-head"><h3>Apply for Leave</h3></div><form id="leaveForm"><label>Leave Type</label><select id="leaveType"><option>Paid</option><option>Sick</option><option>Unpaid</option></select><label>From</label><input id="leaveFrom" type="date" required><label>To</label><input id="leaveTo" type="date" required><label>Remarks</label><textarea id="leaveRemarks" rows="3" placeholder="Reason for leave"></textarea><button class="primary-btn full" type="submit">Submit Request</button></form></div><div class="card"><div class="section-head"><h3>My Leave Balance</h3></div>${["Paid Leave","Sick Leave","Unpaid Leave"].map((x,i)=>`<div style="margin:18px 0"><div style="display:flex;justify-content:space-between;font-size:13px"><b>${x}</b><span>${12-i*3} days</span></div><div class="progress" style="margin-top:7px"><i style="width:${70-i*20}%"></i></div></div>`).join("")}</div></div><div class="card" style="margin-top:18px"><div class="section-head"><h3>My Requests</h3></div>${leaveRows(rows.slice().reverse())}</div>`}
+function submitLeave(ev){ev.preventDefault();const e=employee();leaves.push({id:"L"+Date.now(),employee:e.name,type:$("#leaveType").value,from:$("#leaveFrom").value,to:$("#leaveTo").value,remarks:$("#leaveRemarks").value,status:"Pending"});save();render("leave");toast("Leave request submitted","success")}
+
+function payrollPage(){const e=employee(),rows=e.role==="HR"?employees:[e];return `<div class="grid stats">${stat("Gross Salary",money(e.salary),"₹")}${stat("Basic",money(e.salary*.5),"▣")}${stat("Allowances",money(e.salary*.3),"＋")}${stat("Deductions",money(e.salary*.1),"−")}</div><div class="card" style="margin-top:18px"><div class="section-head"><h3>${e.role==="HR"?"Payroll Control":"My Payroll"}</h3><span class="badge info">Read-only for employees</span></div>${e.role==="HR"?`<div class="table-wrap"><table><thead><tr><th>Employee</th><th>Department</th><th>Gross</th><th>Basic</th><th>Allowances</th><th>Deductions</th><th>Net</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${x.name}</td><td>${x.department}</td><td>${money(x.salary)}</td><td>${money(x.salary*.5)}</td><td>${money(x.salary*.3)}</td><td>${money(x.salary*.1)}</td><td><b>${money(x.salary*.9)}</b></td></tr>`).join("")}</tbody></table></div>`:`<div class="notice">Your payroll data is read-only. Salary structure is managed by HR.</div><div class="detail-list">${detail("Employee",e.name)}${detail("Monthly Gross",money(e.salary))}${detail("Allowances",money(e.salary*.3))}${detail("Deductions",money(e.salary*.1))}${detail("Net Salary",money(e.salary*.9))}${detail("Payslip","Available for download")}</div>`}</div>`}
+
+function employeesPage(){return `<div class="card"><div class="section-head"><h3>Employee Directory</h3><button class="primary-btn" onclick="addEmployee()">+ Add Employee</button></div><div class="filters"><input id="empSearch" placeholder="Search employees..." oninput="filterEmployees()"><select id="deptFilter" onchange="filterEmployees()"><option value="">All departments</option>${[...new Set(employees.map(e=>e.department))].map(d=>`<option>${d}</option>`).join("")}</select></div><div id="employeeTable">${employeeTable(employees)}</div></div>`}
+function employeeTable(rows){return `<div class="table-wrap"><table><thead><tr><th>Employee</th><th>ID</th><th>Department</th><th>Role</th><th>Salary</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows.map(e=>`<tr><td><div class="person"><div class="avatar">${e.initials}</div><b>${e.name}</b></div></td><td>${e.id}</td><td>${e.department}</td><td>${e.role}</td><td>${money(e.salary)}</td><td>${statusBadge(e.status)}</td><td><button class="action" onclick="viewEmployee('${e.id}')">View</button></td></tr>`).join("")}</tbody></table></div>`}
+function filterEmployees(){const q=$("#empSearch").value.toLowerCase(),d=$("#deptFilter").value;$("#employeeTable").innerHTML=employeeTable(employees.filter(e=>(e.name.toLowerCase().includes(q)||e.email.toLowerCase().includes(q)||e.id.toLowerCase().includes(q))&&(!d||e.department===d)))}
+function viewEmployee(id){const e=employees.find(x=>x.id===id);modal(e.name,`<div class="profile-card"><div class="profile-big">${e.initials}</div><p class="muted">${e.id} · ${e.department}</p></div><div class="detail-list">${detail("Email",e.email)}${detail("Phone",e.phone)}${detail("Address",e.address)}${detail("Salary",money(e.salary))}</div>`)}
+function addEmployee(){modal("Add Employee",`<form id="addEmpForm">${["Employee ID","Full Name","Email","Department","Phone","Address"].map((x,i)=>`<label>${x}</label><input id="f${i}" required>`).join("")}<label>Salary</label><input id="f6" type="number" required><div class="form-actions"><button type="button" class="secondary-btn" onclick="closeModal()">Cancel</button><button class="primary-btn">Add Employee</button></div></form>`);$("#addEmpForm").onsubmit=e=>{e.preventDefault();employees.push({id:$("#f0").value,name:$("#f1").value,email:$("#f2").value,department:$("#f3").value,phone:$("#f4").value,address:$("#f5").value,salary:Number($("#f6").value),role:"Employee",status:"Active",initials:initials($("#f1").value)});save();closeModal();render("employees");toast("Employee added","success")}}
+function approvalsPage(){const rows=leaves.filter(l=>l.status==="Pending");return `<div class="card"><div class="section-head"><h3>Leave Approvals</h3><span class="badge warning">${rows.length} pending</span></div>${rows.length?`<div class="table-wrap"><table><thead><tr><th>Employee</th><th>Type</th><th>Dates</th><th>Remarks</th><th>Action</th></tr></thead><tbody>${rows.map(l=>`<tr><td>${l.employee}</td><td>${l.type}</td><td>${l.from} → ${l.to}</td><td>${l.remarks||"—"}</td><td><button class="action success-btn" onclick="decideLeave('${l.id}','Approved')">Approve</button> <button class="action danger-btn" onclick="decideLeave('${l.id}','Rejected')">Reject</button></td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">No pending leave requests 🎉</div>`}</div>`}
+function decideLeave(id,status){const l=leaves.find(x=>x.id===id);l.status=status;save();render("approvals");toast(`Leave ${status.toLowerCase()}`,"success")}
+function reportsPage(){return `<div class="grid stats">${stat("Active Employees",employees.filter(e=>e.status==="Active").length,"♙")}${stat("Attendance Rate","94%","◷")}${stat("Leave Approval","82%","✓")}${stat("Payroll Accuracy","99.2%","₹")}</div><div class="grid two" style="margin-top:18px"><div class="card"><div class="section-head"><h3>Attendance Analytics</h3></div><div class="chart-box"><canvas id="attendanceChart"></canvas></div></div><div class="card"><div class="section-head"><h3>Department Summary</h3></div>${[...new Set(employees.map(e=>e.department))].map(d=>{let n=employees.filter(e=>e.department===d).length;return `<div style="margin:16px 0"><div style="display:flex;justify-content:space-between;font-size:13px"><b>${d}</b><span>${n} employee${n>1?"s":""}</span></div><div class="progress" style="margin-top:7px"><i style="width:${Math.max(18,n/employees.length*100)}%"></i></div></div>`}).join("")}</div></div>`}
+function drawChart(){const c=$("#attendanceChart");if(!c)return;new Chart(c,{type:"line",data:{labels:["Mon","Tue","Wed","Thu","Fri","Sat"],datasets:[{label:"Present",data:[18,20,19,21,20,14],tension:.35,borderWidth:3},{label:"Absent",data:[2,1,2,1,1,3],tension:.35,borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"bottom"}},scales:{y:{beginAtZero:true}}}})}
+
+function modal(title,body){const m=document.createElement("div");m.className="modal";m.id="modal";m.innerHTML=`<div class="modal-card"><div class="modal-head"><h3>${title}</h3><button class="close" onclick="closeModal()">×</button></div>${body}</div>`;document.body.appendChild(m)}
+function closeModal(){$("#modal")?.remove()}
+function notifications(){modal("Notifications",`<div class="notification"><b>Leave request</b><br><span class="muted">Your leave request is awaiting HR approval.</span></div><div class="notification"><b>Attendance reminder</b><br><span class="muted">Don't forget to check out at the end of your shift.</span></div><div class="notification"><b>Payroll</b><br><span class="muted">Monthly payslip is available.</span></div>`)}
+
+$$(".auth-tab").forEach(b=>b.onclick=()=>{$$(".auth-tab").forEach(x=>x.classList.remove("active"));b.classList.add("active");$("#signinForm").classList.toggle("hidden",b.dataset.auth!=="signin");$("#signupForm").classList.toggle("hidden",b.dataset.auth!=="signup")});
+$("#signinForm").onsubmit=e=>{e.preventDefault();login($("#loginEmail").value,$("#loginPassword").value)}
+$("#signupForm").onsubmit=e=>{e.preventDefault();let x={id:$("#signupId").value,name:$("#signupName").value,email:$("#signupEmail").value,password:$("#signupPassword").value,role:$("#signupRole").value,department:"General",phone:"Not added",address:"Not added",salary:40000,status:"Active",initials:initials($("#signupName").value)};if(employees.some(e=>e.email===x.email)){toast("Email already registered","error");return}employees.push(x);save();toast("Account created. Use the demo password to sign in.","success");document.querySelector('[data-auth="signin"]').click();$("#loginEmail").value=x.email;$("#loginPassword").value="123456"};
+$("#logoutBtn").onclick=logout;$("#notifyBtn").onclick=notifications;
+$("#nav").onclick=e=>{const b=e.target.closest(".nav-item");if(b)render(b.dataset.page)};
+document.addEventListener("submit",e=>{if(e.target.id==="leaveForm")submitLeave(e)});
+const saved=JSON.parse(localStorage.getItem("pf_current")||"null");if(saved){current=saved;openApp()}
+
+  </script>
+</body>
+</html>
