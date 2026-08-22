@@ -1,1 +1,509 @@
+#include "config.h"
+#include <mysql/mysql.h>
+#include <openssl/sha.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <time.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
 
+#define BUF_SIZE 65536
+#define SMALL 4096
+
+typedef struct {
+    int fd;
+    char method[16];
+    char path[256];
+    char cookie[256];
+    char body[BUF_SIZE];
+} Request;
+
+static void sha256_hex(const char *input, char out[65]) {
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256((const unsigned char*)input, strlen(input), hash);
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++)
+        sprintf(out + i*2, "%02x", hash[i]);
+    out[64] = '\0';
+}
+
+static void random_hex(char out[65]) {
+    FILE *f = fopen("/dev/urandom", "rb");
+    unsigned char b[32];
+    if (f) {
+        fread(b, 1, 32, f);
+        fclose(f);
+    } else {
+        srand((unsigned)time(NULL) ^ (unsigned)getpid());
+        for (int i=0;i<32;i++) b[i] = rand() & 255;
+    }
+    for (int i=0;i<32;i++) sprintf(out+i*2, "%02x", b[i]);
+    out[64] = '\0';
+}
+
+static MYSQL *db_open(void) {
+    MYSQL *db = mysql_init(NULL);
+    if (!db) return NULL;
+    if (!mysql_real_connect(db, DB_HOST, DB_USER, DB_PASSWORD,
+                            DB_NAME, DB_PORT, NULL, 0)) {
+        fprintf(stderr, "MySQL connection failed: %s\n", mysql_error(db));
+        mysql_close(db);
+        return NULL;
+    }
+    mysql_set_character_set(db, "utf8mb4");
+    return db;
+}
+
+static void json_escape(const char *src, char *dst, size_t cap) {
+    size_t j=0;
+    for (size_t i=0; src && src[i] && j+2<cap; i++) {
+        char c=src[i];
+        if (c=='"' || c=='\\') { dst[j++]='\\'; dst[j++]=c; }
+        else if (c=='\n') { dst[j++]='\\'; dst[j++]='n'; }
+        else if ((unsigned char)c < 32) dst[j++]=' ';
+        else dst[j++]=c;
+    }
+    dst[j]='\0';
+}
+
+static int json_string(const char *json, const char *key, char *out, size_t cap) {
+    char needle[128];
+    snprintf(needle, sizeof needle, "\"%s\"", key);
+    const char *p = strstr(json, needle);
+    if (!p) return 0;
+    p = strchr(p + strlen(needle), ':');
+    if (!p) return 0;
+    p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '"') return 0;
+    p++;
+    size_t j=0;
+    while (*p && *p!='"' && j+1<cap) {
+        if (*p=='\\' && p[1]) p++;
+        out[j++] = *p++;
+    }
+    out[j]='\0';
+    return 1;
+}
+
+static int json_int(const char *json, const char *key, int *out) {
+    char needle[128];
+    snprintf(needle, sizeof needle, "\"%s\"", key);
+    const char *p = strstr(json, needle);
+    if (!p) return 0;
+    p = strchr(p + strlen(needle), ':');
+    if (!p) return 0;
+    p++;
+    *out = atoi(p);
+    return 1;
+}
+
+static void send_raw(int fd, const char *status, const char *type,
+                     const char *extra, const char *body) {
+    char head[1024];
+    int len = (int)strlen(body);
+    snprintf(head, sizeof head,
+             "HTTP/1.1 %s\r\n"
+             "Content-Type: %s\r\n"
+             "Content-Length: %d\r\n"
+             "Access-Control-Allow-Origin: *\r\n"
+             "Access-Control-Allow-Headers: Content-Type\r\n"
+             "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
+             "Connection: close\r\n"
+             "%s\r\n",
+             status, type, len, extra ? extra : "");
+    send(fd, head, strlen(head), 0);
+    send(fd, body, len, 0);
+}
+
+static void send_json(int fd, int code, const char *json) {
+    const char *status = code==200 ? "200 OK" :
+                         code==201 ? "201 Created" :
+                         code==400 ? "400 Bad Request" :
+                         code==401 ? "401 Unauthorized" :
+                         code==403 ? "403 Forbidden" :
+                         code==404 ? "404 Not Found" : "500 Internal Server Error";
+    send_raw(fd, status, "application/json; charset=utf-8", "", json);
+}
+
+static void serve_file(int fd, const char *path) {
+    char full[512];
+    if (!strcmp(path, "/")) path = "/index.html";
+    snprintf(full, sizeof full, "%s%s", FRONTEND_DIR, path);
+
+    struct stat st;
+    if (stat(full, &st) != 0 || !S_ISREG(st.st_mode)) {
+        send_raw(fd, "404 Not Found", "text/plain", "", "Not found");
+        return;
+    }
+
+    FILE *f = fopen(full, "rb");
+    if (!f) { send_raw(fd, "500 Internal Server Error", "text/plain", "", "File error"); return; }
+    char *data = malloc(st.st_size + 1);
+    if (!data) { fclose(f); return; }
+    fread(data, 1, st.st_size, f);
+    fclose(f);
+    data[st.st_size] = 0;
+
+    const char *type = "text/plain";
+    const char *ext = strrchr(path, '.');
+    if (ext) {
+        if (!strcmp(ext, ".html")) type="text/html; charset=utf-8";
+        else if (!strcmp(ext, ".css")) type="text/css; charset=utf-8";
+        else if (!strcmp(ext, ".js")) type="application/javascript; charset=utf-8";
+        else if (!strcmp(ext, ".json")) type="application/json";
+        else if (!strcmp(ext, ".svg")) type="image/svg+xml";
+    }
+    send_raw(fd, "200 OK", type, "", data);
+    free(data);
+}
+
+static int get_session(MYSQL *db, const char *cookie, int *uid, char *role, size_t rolecap) {
+    if (!cookie || !*cookie) return 0;
+    char token[65] = {0};
+    const char *p = strstr(cookie, "DAYFLOW_SESSION=");
+    if (!p) return 0;
+    p += strlen("DAYFLOW_SESSION=");
+    size_t i=0;
+    while (*p && *p!=';' && i<64) token[i++]=*p++;
+    token[i]='\0';
+    if (strlen(token)!=64) return 0;
+
+    MYSQL_STMT *st = mysql_stmt_init(db);
+    const char *sql =
+        "SELECT u.id,u.role FROM sessions s JOIN users u ON u.id=s.user_id "
+        "WHERE s.token=? AND s.expires_at>NOW()";
+    if (!st || mysql_stmt_prepare(st, sql, strlen(sql))) { if(st)mysql_stmt_close(st); return 0; }
+
+    MYSQL_BIND in[1]; memset(in,0,sizeof(in));
+    in[0].buffer_type=MYSQL_TYPE_STRING; in[0].buffer=token; in[0].buffer_length=64;
+    mysql_stmt_bind_param(st,in);
+    if (mysql_stmt_execute(st)) { mysql_stmt_close(st); return 0; }
+
+    MYSQL_BIND out[2]; memset(out,0,sizeof(out));
+    int id=0; char r[20]={0}; unsigned long rl=0;
+    out[0].buffer_type=MYSQL_TYPE_LONG; out[0].buffer=&id;
+    out[1].buffer_type=MYSQL_TYPE_STRING; out[1].buffer=r; out[1].buffer_length=sizeof(r); out[1].length=&rl;
+    mysql_stmt_bind_result(st,out);
+    int ok = mysql_stmt_fetch(st)==0;
+    if (ok) { *uid=id; snprintf(role,rolecap,"%s",r); }
+    mysql_stmt_close(st);
+    return ok;
+}
+
+static void handle_api(Request *req) {
+    MYSQL *db = db_open();
+    if (!db) { send_json(req->fd,500,"{\"error\":\"Database unavailable\"}"); return; }
+
+    if (!strcmp(req->method,"OPTIONS")) {
+        send_raw(req->fd,"204 No Content","text/plain","Access-Control-Allow-Credentials: true","");
+        mysql_close(db); return;
+    }
+
+    if (!strcmp(req->path,"/api/register") && !strcmp(req->method,"POST")) {
+        char eid[64],email[160],pass[160],role[32],name[160],phone[40],address[300],job[140],dept[140];
+        if (!json_string(req->body,"employee_id",eid,sizeof eid) ||
+            !json_string(req->body,"email",email,sizeof email) ||
+            !json_string(req->body,"password",pass,sizeof pass) ||
+            !json_string(req->body,"role",role,sizeof role) ||
+            !json_string(req->body,"full_name",name,sizeof name)) {
+            send_json(req->fd,400,"{\"error\":\"Required fields are missing\"}"); goto done;
+        }
+        json_string(req->body,"phone",phone,sizeof phone);
+        json_string(req->body,"address",address,sizeof address);
+        json_string(req->body,"job_title",job,sizeof job);
+        json_string(req->body,"department",dept,sizeof dept);
+
+        if (strlen(pass)<8) { send_json(req->fd,400,"{\"error\":\"Password must be at least 8 characters\"}"); goto done; }
+        if (strcmp(role,"EMPLOYEE") && strcmp(role,"HR")) { send_json(req->fd,400,"{\"error\":\"Invalid role\"}"); goto done; }
+
+        char ph[65]; sha256_hex(pass,ph);
+        MYSQL_STMT *st=mysql_stmt_init(db);
+        const char *sql="INSERT INTO users(employee_id,email,password_hash,role,email_verified,full_name,phone,address,job_title,department) VALUES(?,?,?, ?,0,?,?,?,?,?)";
+        if (!st || mysql_stmt_prepare(st,sql,strlen(sql))) { send_json(req->fd,500,"{\"error\":\"Database error\"}"); if(st)mysql_stmt_close(st); goto done; }
+
+        MYSQL_BIND b[9]; memset(b,0,sizeof b);
+        char *vals[9]={eid,email,ph,role,name,phone,address,job,dept};
+        for(int i=0;i<9;i++){b[i].buffer_type=MYSQL_TYPE_STRING;b[i].buffer=vals[i];b[i].buffer_length=strlen(vals[i]);}
+        if (mysql_stmt_bind_param(st,b) || mysql_stmt_execute(st)) {
+            const char *e=mysql_stmt_error(st);
+            char esc[256]; json_escape(e,esc,sizeof esc);
+            char out[400]; snprintf(out,sizeof out,"{\"error\":\"%s\"}",esc); send_json(req->fd,400,out);
+        } else {
+            /* Demo project: mark verified so the app works immediately. */
+            int new_id=(int)mysql_insert_id(db);
+            char sql2[256]; snprintf(sql2,sizeof sql2,"UPDATE users SET email_verified=1 WHERE id=%d",new_id);
+            mysql_query(db,sql2);
+            char out[256]; snprintf(out,sizeof out,"{\"message\":\"Registration successful\",\"id\":%d}",new_id);
+            send_json(req->fd,201,out);
+        }
+        mysql_stmt_close(st);
+        goto done;
+    }
+
+    if (!strcmp(req->path,"/api/login") && !strcmp(req->method,"POST")) {
+        char email[160],pass[160];
+        if(!json_string(req->body,"email",email,sizeof email) || !json_string(req->body,"password",pass,sizeof pass)){
+            send_json(req->fd,400,"{\"error\":\"Email and password are required\"}"); goto done;
+        }
+        char ph[65]; sha256_hex(pass,ph);
+        MYSQL_STMT *st=mysql_stmt_init(db);
+        const char *sql="SELECT id,role FROM users WHERE email=? AND password_hash=? AND email_verified=1";
+        if(!st || mysql_stmt_prepare(st,sql,strlen(sql))){send_json(req->fd,500,"{\"error\":\"Database error\"}");if(st)mysql_stmt_close(st);goto done;}
+        MYSQL_BIND in[2]; memset(in,0,sizeof in);
+        in[0].buffer_type=MYSQL_TYPE_STRING;in[0].buffer=email;in[0].buffer_length=strlen(email);
+        in[1].buffer_type=MYSQL_TYPE_STRING;in[1].buffer=ph;in[1].buffer_length=64;
+        mysql_stmt_bind_param(st,in); mysql_stmt_execute(st);
+        MYSQL_BIND outb[2]; memset(outb,0,sizeof outb);
+        int uid=0; char role[20]={0}; unsigned long rl=0;
+        outb[0].buffer_type=MYSQL_TYPE_LONG;outb[0].buffer=&uid;
+        outb[1].buffer_type=MYSQL_TYPE_STRING;outb[1].buffer=role;outb[1].buffer_length=20;outb[1].length=&rl;
+        mysql_stmt_bind_result(st,outb);
+        if(mysql_stmt_fetch(st)!=0){
+            send_json(req->fd,401,"{\"error\":\"Invalid email or password\"}");
+            mysql_stmt_close(st); goto done;
+        }
+        mysql_stmt_close(st);
+
+        char token[65]; random_hex(token);
+        MYSQL_STMT *s2=mysql_stmt_init(db);
+        const char *q="INSERT INTO sessions(token,user_id,expires_at) VALUES(?,?,DATE_ADD(NOW(),INTERVAL 8 HOUR))";
+        mysql_stmt_prepare(s2,q,strlen(q));
+        MYSQL_BIND bb[2]; memset(bb,0,sizeof bb);
+        bb[0].buffer_type=MYSQL_TYPE_STRING;bb[0].buffer=token;bb[0].buffer_length=64;
+        bb[1].buffer_type=MYSQL_TYPE_LONG;bb[1].buffer=&uid;
+        mysql_stmt_bind_param(s2,bb); mysql_stmt_execute(s2); mysql_stmt_close(s2);
+
+        char extra[256];
+        snprintf(extra,sizeof extra,"Set-Cookie: DAYFLOW_SESSION=%s; HttpOnly; SameSite=Lax; Path=/\r\n",token);
+        send_raw(req->fd,"200 OK","application/json; charset=utf-8",extra,
+                 strcmp(role,"HR")==0 ? "{\"message\":\"Login successful\",\"role\":\"HR\"}" :
+                                        "{\"message\":\"Login successful\",\"role\":\"EMPLOYEE\"}");
+        goto done;
+    }
+
+    int uid=0; char role[20]={0};
+    int logged=get_session(db,req->cookie,&uid,role,sizeof role);
+
+    if (!strcmp(req->path,"/api/logout") && !strcmp(req->method,"POST")) {
+        const char *p=strstr(req->cookie,"DAYFLOW_SESSION=");
+        if(p){p+=16;char token[65]={0};sscanf(p,"%64[^;]",token);char q[160];snprintf(q,sizeof q,"DELETE FROM sessions WHERE token='%s'",token);mysql_query(db,q);}
+        send_raw(req->fd,"200 OK","application/json","Set-Cookie: DAYFLOW_SESSION=; Max-Age=0; HttpOnly; SameSite=Lax; Path=/\r\n","{\"message\":\"Logged out\"}");
+        goto done;
+    }
+
+    if (!logged) { send_json(req->fd,401,"{\"error\":\"Please sign in\"}"); goto done; }
+
+    if (!strcmp(req->path,"/api/me") && !strcmp(req->method,"GET")) {
+        char q[256]; snprintf(q,sizeof q,"SELECT employee_id,email,role,full_name,phone,address,job_title,department,profile_picture FROM users WHERE id=%d",uid);
+        if(mysql_query(db,q)){send_json(req->fd,500,"{\"error\":\"Database error\"}");goto done;}
+        MYSQL_RES *res=mysql_store_result(db); MYSQL_ROW row=mysql_fetch_row(res);
+        if(!row){mysql_free_result(res);send_json(req->fd,404,"{\"error\":\"User not found\"}");goto done;}
+        char e[9][600]; for(int i=0;i<9;i++)json_escape(row[i]?row[i]:"",e[i],sizeof e[i]);
+        char out[5000];
+        snprintf(out,sizeof out,"{\"employee_id\":\"%s\",\"email\":\"%s\",\"role\":\"%s\",\"full_name\":\"%s\",\"phone\":\"%s\",\"address\":\"%s\",\"job_title\":\"%s\",\"department\":\"%s\",\"profile_picture\":\"%s\"}",e[0],e[1],e[2],e[3],e[4],e[5],e[6],e[7],e[8]);
+        mysql_free_result(res); send_json(req->fd,200,out); goto done;
+    }
+
+    if (!strcmp(req->path,"/api/profile") && !strcmp(req->method,"POST")) {
+        char phone[40],address[300],pic[500];
+        json_string(req->body,"phone",phone,sizeof phone);
+        json_string(req->body,"address",address,sizeof address);
+        json_string(req->body,"profile_picture",pic,sizeof pic);
+        MYSQL_STMT *st=mysql_stmt_init(db);
+        const char *sql="UPDATE users SET phone=?,address=?,profile_picture=? WHERE id=?";
+        mysql_stmt_prepare(st,sql,strlen(sql));
+        MYSQL_BIND b[4];memset(b,0,sizeof b);
+        char *v[3]={phone,address,pic};
+        for(int i=0;i<3;i++){b[i].buffer_type=MYSQL_TYPE_STRING;b[i].buffer=v[i];b[i].buffer_length=strlen(v[i]);}
+        b[3].buffer_type=MYSQL_TYPE_LONG;b[3].buffer=&uid;
+        mysql_stmt_bind_param(st,b);
+        if(mysql_stmt_execute(st))send_json(req->fd,500,"{\"error\":\"Could not update profile\"}");
+        else send_json(req->fd,200,"{\"message\":\"Profile updated\"}");
+        mysql_stmt_close(st);goto done;
+    }
+
+    if (!strcmp(req->path,"/api/attendance") && !strcmp(req->method,"GET")) {
+        char q[300];
+        if(!strcmp(role,"HR"))
+            snprintf(q,sizeof q,"SELECT a.id,u.full_name,a.attendance_date,a.check_in,a.check_out,a.status FROM attendance a JOIN users u ON u.id=a.user_id ORDER BY a.attendance_date DESC LIMIT 200");
+        else
+            snprintf(q,sizeof q,"SELECT a.id,u.full_name,a.attendance_date,a.check_in,a.check_out,a.status FROM attendance a JOIN users u ON u.id=a.user_id WHERE u.id=%d ORDER BY a.attendance_date DESC LIMIT 100",uid);
+        if(mysql_query(db,q)){send_json(req->fd,500,"{\"error\":\"Database error\"}");goto done;}
+        MYSQL_RES *res=mysql_store_result(db); MYSQL_ROW row;
+        char out[30000]; strcpy(out,"{\"records\":["); int first=1;
+        while((row=mysql_fetch_row(res))){
+            char esc[6][500];for(int i=0;i<6;i++)json_escape(row[i]?row[i]:"",esc[i],sizeof esc[i]);
+            char item[1200];snprintf(item,sizeof item,"%s{\"id\":%s,\"full_name\":\"%s\",\"date\":\"%s\",\"check_in\":\"%s\",\"check_out\":\"%s\",\"status\":\"%s\"}",first?"":",",esc[0],esc[1],esc[2],esc[3],esc[4],esc[5]);
+            if(strlen(out)+strlen(item)+20<sizeof out)strcat(out,item); first=0;
+        }
+        strcat(out,"]}");mysql_free_result(res);send_json(req->fd,200,out);goto done;
+    }
+
+    if ((!strcmp(req->path,"/api/checkin") || !strcmp(req->path,"/api/checkout")) && !strcmp(req->method,"POST")) {
+        const char *col = !strcmp(req->path,"/api/checkin") ? "check_in" : "check_out";
+        char q[500];
+        snprintf(q,sizeof q,
+                 "INSERT INTO attendance(user_id,attendance_date,%s,status) VALUES(%d,CURDATE(),NOW(),'PRESENT') "
+                 "ON DUPLICATE KEY UPDATE %s=NOW(),status='PRESENT'",col,uid,col);
+        if(mysql_query(db,q)) send_json(req->fd,400,"{\"error\":\"Attendance action failed\"}");
+        else send_json(req->fd,200,"{\"message\":\"Attendance updated\"}");
+        goto done;
+    }
+
+    if (!strcmp(req->path,"/api/leave") && !strcmp(req->method,"POST")) {
+        char type[20],start[20],end[20],remarks[600];
+        if(!json_string(req->body,"leave_type",type,sizeof type) ||
+           !json_string(req->body,"start_date",start,sizeof start) ||
+           !json_string(req->body,"end_date",end,sizeof end)) {
+            send_json(req->fd,400,"{\"error\":\"Leave type and dates are required\"}");goto done;
+        }
+        json_string(req->body,"remarks",remarks,sizeof remarks);
+        char q[1800];
+        snprintf(q,sizeof q,"INSERT INTO leave_requests(user_id,leave_type,start_date,end_date,remarks) VALUES(%d,'%s','%s','%s','%s')",uid,type,start,end,remarks);
+        if(mysql_query(db,q))send_json(req->fd,400,"{\"error\":\"Could not submit leave request\"}");
+        else send_json(req->fd,201,"{\"message\":\"Leave request submitted\"}");
+        goto done;
+    }
+
+    if (!strcmp(req->path,"/api/leaves") && !strcmp(req->method,"GET")) {
+        char q[500];
+        if(!strcmp(role,"HR"))
+            snprintf(q,sizeof q,"SELECT l.id,u.full_name,l.leave_type,l.start_date,l.end_date,l.remarks,l.status,l.admin_comment FROM leave_requests l JOIN users u ON u.id=l.user_id ORDER BY l.created_at DESC LIMIT 200");
+        else
+            snprintf(q,sizeof q,"SELECT l.id,u.full_name,l.leave_type,l.start_date,l.end_date,l.remarks,l.status,l.admin_comment FROM leave_requests l JOIN users u ON u.id=l.user_id WHERE l.user_id=%d ORDER BY l.created_at DESC",uid);
+        if(mysql_query(db,q)){send_json(req->fd,500,"{\"error\":\"Database error\"}");goto done;}
+        MYSQL_RES *res=mysql_store_result(db);MYSQL_ROW row;char out[40000];strcpy(out,"{\"records\":[");int first=1;
+        while((row=mysql_fetch_row(res))){
+            char e[8][700];for(int i=0;i<8;i++)json_escape(row[i]?row[i]:"",e[i],sizeof e[i]);
+            char item[1600];snprintf(item,sizeof item,"%s{\"id\":%s,\"full_name\":\"%s\",\"leave_type\":\"%s\",\"start_date\":\"%s\",\"end_date\":\"%s\",\"remarks\":\"%s\",\"status\":\"%s\",\"admin_comment\":\"%s\"}",first?"":",",e[0],e[1],e[2],e[3],e[4],e[5],e[6],e[7]);
+            if(strlen(out)+strlen(item)+20<sizeof out)strcat(out,item);first=0;
+        }
+        strcat(out,"]}");mysql_free_result(res);send_json(req->fd,200,out);goto done;
+    }
+
+    if (!strcmp(req->path,"/api/leave/review") && !strcmp(req->method,"POST")) {
+        if(strcmp(role,"HR")){send_json(req->fd,403,"{\"error\":\"HR access required\"}");goto done;}
+        int id=0;char status[20],comment[600];
+        if(!json_int(req->body,"id",&id)||!json_string(req->body,"status",status,sizeof status)){send_json(req->fd,400,"{\"error\":\"Invalid review\"}");goto done;}
+        json_string(req->body,"admin_comment",comment,sizeof comment);
+        if(strcmp(status,"APPROVED")&&strcmp(status,"REJECTED")){send_json(req->fd,400,"{\"error\":\"Invalid status\"}");goto done;}
+        char q[1400];snprintf(q,sizeof q,"UPDATE leave_requests SET status='%s',admin_comment='%s',reviewed_at=NOW() WHERE id=%d",status,comment,id);
+        if(mysql_query(db,q))send_json(req->fd,500,"{\"error\":\"Could not review request\"}");
+        else send_json(req->fd,200,"{\"message\":\"Leave request reviewed\"}");
+        goto done;
+    }
+
+
+    if (!strcmp(req->path,"/api/employees") && !strcmp(req->method,"GET")) {
+        if(strcmp(role,"HR")){send_json(req->fd,403,"{\"error\":\"HR access required\"}");goto done;}
+        if(mysql_query(db,"SELECT id,employee_id,full_name,email,role,job_title,department,phone FROM users ORDER BY full_name")){send_json(req->fd,500,"{\"error\":\"Database error\"}");goto done;}
+        MYSQL_RES *res=mysql_store_result(db);MYSQL_ROW row;char out[30000];strcpy(out,"{\"employees\":[");int first=1;
+        while((row=mysql_fetch_row(res))){
+            char e[8][500];for(int i=0;i<8;i++)json_escape(row[i]?row[i]:"",e[i],sizeof e[i]);
+            char item[1300];snprintf(item,sizeof item,"%s{\"id\":%s,\"employee_id\":\"%s\",\"full_name\":\"%s\",\"email\":\"%s\",\"role\":\"%s\",\"job_title\":\"%s\",\"department\":\"%s\",\"phone\":\"%s\"}",first?"":",",e[0],e[1],e[2],e[3],e[4],e[5],e[6],e[7]);
+            if(strlen(out)+strlen(item)+20<sizeof out)strcat(out,item);first=0;
+        }
+        strcat(out,"]}");mysql_free_result(res);send_json(req->fd,200,out);goto done;
+    }
+
+
+    if (!strcmp(req->path,"/api/payroll") && !strcmp(req->method,"GET")) {
+        char q[600];
+        if(!strcmp(role,"HR"))
+            snprintf(q,sizeof q,"SELECT p.id,u.full_name,p.basic_salary,p.allowances,p.deductions,(p.basic_salary+p.allowances-p.deductions) net FROM payroll p JOIN users u ON u.id=p.user_id ORDER BY u.full_name");
+        else
+            snprintf(q,sizeof q,"SELECT p.id,u.full_name,p.basic_salary,p.allowances,p.deductions,(p.basic_salary+p.allowances-p.deductions) net FROM payroll p JOIN users u ON u.id=p.user_id WHERE p.user_id=%d",uid);
+        if(mysql_query(db,q)){send_json(req->fd,500,"{\"error\":\"Database error\"}");goto done;}
+        MYSQL_RES *res=mysql_store_result(db);MYSQL_ROW row;char out[30000];strcpy(out,"{\"records\":[");int first=1;
+        while((row=mysql_fetch_row(res))){
+            char e[6][300];for(int i=0;i<6;i++)json_escape(row[i]?row[i]:"",e[i],sizeof e[i]);
+            char item[900];snprintf(item,sizeof item,"%s{\"id\":%s,\"full_name\":\"%s\",\"basic_salary\":%s,\"allowances\":%s,\"deductions\":%s,\"net\":%s}",first?"":",",e[0],e[1],e[2],e[3],e[4],e[5]);
+            if(strlen(out)+strlen(item)+20<sizeof out)strcat(out,item);first=0;
+        }
+        strcat(out,"]}");mysql_free_result(res);send_json(req->fd,200,out);goto done;
+    }
+
+    if (!strcmp(req->path,"/api/payroll/update") && !strcmp(req->method,"POST")) {
+        if(strcmp(role,"HR")){send_json(req->fd,403,"{\"error\":\"HR access required\"}");goto done;}
+        int employee_user_id=0;char basic[50],allow[50],ded[50];
+        if(!json_int(req->body,"user_id",&employee_user_id)||!json_string(req->body,"basic_salary",basic,sizeof basic)){send_json(req->fd,400,"{\"error\":\"Invalid payroll data\"}");goto done;}
+        json_string(req->body,"allowances",allow,sizeof allow);json_string(req->body,"deductions",ded,sizeof ded);
+        char q[900];snprintf(q,sizeof q,"INSERT INTO payroll(user_id,basic_salary,allowances,deductions) VALUES(%d,%s,%s,%s) ON DUPLICATE KEY UPDATE basic_salary=%s,allowances=%s,deductions=%s",employee_user_id,basic,*allow?allow:"0",*ded?ded:"0",basic,*allow?allow:"0",*ded?ded:"0");
+        if(mysql_query(db,q))send_json(req->fd,400,"{\"error\":\"Could not update payroll\"}");
+        else send_json(req->fd,200,"{\"message\":\"Payroll updated\"}");
+        goto done;
+    }
+
+    send_json(req->fd,404,"{\"error\":\"API endpoint not found\"}");
+
+done:
+    mysql_close(db);
+}
+
+static void *client_thread(void *arg) {
+    int fd=*(int*)arg;free(arg);
+    Request req;memset(&req,0,sizeof req);req.fd=fd;
+
+    char buf[BUF_SIZE];int n=recv(fd,buf,sizeof(buf)-1,0);
+    if(n<=0){close(fd);return NULL;}buf[n]='\0';
+
+    char *line_end=strstr(buf,"\r\n");
+    if(!line_end){close(fd);return NULL;}
+    sscanf(buf,"%15s %255s",req.method,req.path);
+
+    char *headers_end=strstr(buf,"\r\n\r\n");
+    int header_len=headers_end ? (int)(headers_end-buf+4) : n;
+    if(headers_end){
+        char *cl=strcasestr(buf,"Content-Length:");
+        if(cl) {
+            int content_len=atoi(cl+15);
+            if(content_len>0 && content_len<(int)sizeof(req.body)-1) {
+                int already=n-header_len;
+                if(already>0)memcpy(req.body,buf+header_len,already);
+                int total=already;
+                while(total<content_len){
+                    int r=recv(fd,req.body+total,content_len-total,0);
+                    if(r<=0)break; total+=r;
+                }
+                req.body[total]='\0';
+            }
+        }
+        char *ck=strcasestr(buf,"Cookie:");
+        if(ck){ck+=7;while(*ck==' ')ck++;char *e=strstr(ck,"\r\n");if(e){size_t l=e-ck;if(l>=sizeof(req.cookie))l=sizeof(req.cookie)-1;memcpy(req.cookie,ck,l);req.cookie[l]='\0';}}
+    }
+
+    if(!strncmp(req.path,"/api/",5)) handle_api(&req);
+    else serve_file(req.fd,req.path);
+
+    close(fd);
+    return NULL;
+}
+
+int main(void) {
+    int server=socket(AF_INET,SOCK_STREAM,0);
+    if(server<0){perror("socket");return 1;}
+    int yes=1;setsockopt(server,SOL_SOCKET,SO_REUSEADDR,&yes,sizeof yes);
+
+    struct sockaddr_in addr;memset(&addr,0,sizeof addr);
+    addr.sin_family=AF_INET;addr.sin_addr.s_addr=INADDR_ANY;addr.sin_port=htons(SERVER_PORT);
+    if(bind(server,(struct sockaddr*)&addr,sizeof addr)<0){perror("bind");return 1;}
+    if(listen(server,50)<0){perror("listen");return 1;}
+
+    printf("Dayflow HRMS running at http://localhost:%d\n",SERVER_PORT);
+    printf("Frontend directory: %s\n",FRONTEND_DIR);
+
+    while(1){
+        struct sockaddr_in client;socklen_t len=sizeof client;
+        int fd=accept(server,(struct sockaddr*)&client,&len);
+        if(fd<0)continue;
+        int *p=malloc(sizeof(int));*p=fd;
+        pthread_t t;pthread_create(&t,NULL,client_thread,p);pthread_detach(t);
+    }
+    close(server);return 0;
+}
