@@ -80,8 +80,8 @@
                 >
 
                 <select id="signupRole">
-                    <option value="employee">EMPLOYEE</option>
-                    <option value="hr">HR</option>
+                    <option value="EMPLOYEE">EMPLOYEE</option>
+                    <option value="HR">HR</option>
                 </select>
 
                 <button type="submit">Create Account</button>
