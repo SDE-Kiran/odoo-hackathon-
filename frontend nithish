@@ -80,7 +80,7 @@
                 >
 
                 <select id="signupRole">
-                    <option value="employee">Employee</option>
+                    <option value="employee">EMPLOYEE</option>
                     <option value="hr">HR</option>
                 </select>
 
