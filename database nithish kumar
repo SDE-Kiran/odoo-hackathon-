@@ -1,1 +1,47 @@
+CREATE TABLE Employees (
+    employee_id VARCHAR(10) PRIMARY KEY,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(20) CHECK (role IN ('Employee', 'HR Admin')) NOT NULL,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    job_details VARCHAR(100),
+    salary DECIMAL(10, 2),
+    last_modified_by VARCHAR(10) -- Tracks who last updated this profile
+);
 
+CREATE TABLE Attendance (
+    attendance_id INT AUTO_INCREMENT PRIMARY KEY,
+    employee_id VARCHAR(10),
+    record_date DATE NOT NULL,
+    check_in TIME,
+    check_out TIME,
+    status VARCHAR(20) CHECK (status IN ('Present', 'Absent', 'Half-day', 'Leave')) NOT NULL,
+    FOREIGN KEY (employee_id) REFERENCES Employees(employee_id) ON DELETE CASCADE
+);
+
+
+CREATE TABLE Leave_Requests (
+    leave_id INT AUTO_INCREMENT PRIMARY KEY,
+    employee_id VARCHAR(10),
+    leave_type VARCHAR(20) CHECK (leave_type IN ('Paid', 'Sick', 'Unpaid')) NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    remarks TEXT,
+    status VARCHAR(20) CHECK (status IN ('Pending', 'Approved', 'Rejected')) NOT NULL, -- Must be explicitly stated now
+    admin_comments TEXT,
+    actioned_by VARCHAR(10), -- Stores the ID of the HR Admin who approved/rejected
+    action_timestamp TIMESTAMP NULL, -- Stores WHEN the admin took action
+    FOREIGN KEY (employee_id) REFERENCES Employees(employee_id) ON DELETE CASCADE,
+    FOREIGN KEY (actioned_by) REFERENCES Employees(employee_id) ON DELETE SET NULL
+);
+
+CREATE TABLE System_Access_Logs (
+    log_id INT AUTO_INCREMENT PRIMARY KEY,
+    employee_id VARCHAR(10) NOT NULL, -- The person who logged in / took action
+    action_type VARCHAR(50) NOT NULL, -- e.g., 'LOGIN', 'APPROVE_LEAVE', 'VIEW_PAYROLL'
+    access_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ip_address VARCHAR(45),
+    details TEXT, -- Specific details about what was accessed
+    FOREIGN KEY (employee_id) REFERENCES Employees(employee_id) ON DELETE CASCADE
+);
